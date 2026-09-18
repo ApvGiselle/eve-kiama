@@ -110,7 +110,7 @@
         ballSize: 50, customColor: '#4a90e2', bgImage: '', bgImageWidth: 0, bgImageHeight: 0, 
         bgBlur: 10, bgBrightness: 70, lrcMode: 'popup', lrcFont: 16, lrcBottom: 80, 
         panelRatio: 'default', shapeStyle: 'round', theme: 'adaptive',
-        nowCoverImage: '', nowPlayingLabel: 'NOW PLAYING', showBall: true
+        nowCoverImage: '', nowPlayingLabel: 'NOW PLAYING'
     };
     try {
         const s = localStorage.getItem(CONFIG.SETTINGS_KEY);
@@ -536,17 +536,10 @@
         .fm-lrc-mode-btn.active { color: var(--fm-accent); border-color: var(--fm-accent); }
         .fm-lrc-settings-row input[type=range] { flex: 1; accent-color: var(--fm-accent); }
         .force-hide { display: none !important; }
-        .fm-ball.fm-ball-hidden { display: none !important; }
 
         .fm-page-play .fm-play-lyrics-settings { margin-top:2px; }
         .fm-page-play .fm-play-lyrics-settings .fm-lrc-settings-panel.open, .fm-page-more .fm-play-lyrics-settings .fm-lrc-settings-panel.open { display:flex; padding:8px 0 4px; border-top:0; }
         .fm-page-play .fm-quick-card { min-height:52px; box-sizing:border-box; }
-        .fm-switch { position:relative; display:inline-flex; width:42px; height:24px; flex:0 0 auto; cursor:pointer; }
-        .fm-switch input { position:absolute; opacity:0; width:0; height:0; }
-        .fm-switch-slider { position:absolute; inset:0; border-radius:999px; background:var(--fm-border); border:1px solid var(--fm-border); transition:var(--fm-transition); }
-        .fm-switch-slider::before { content:''; position:absolute; width:18px; height:18px; left:2px; top:2px; border-radius:50%; background:var(--fm-text-sub); transition:var(--fm-transition); box-shadow:0 1px 4px var(--fm-shadow); }
-        .fm-switch input:checked + .fm-switch-slider { background:var(--fm-accent); border-color:var(--fm-accent); }
-        .fm-switch input:checked + .fm-switch-slider::before { transform:translateX(18px); background:#fff; }
         .fm-bottom-nav { grid-template-columns:repeat(2,1fr); }
 
         .fm-app-head { display:flex; align-items:center; justify-content:space-between; padding:14px 16px 10px; flex:0 0 auto; }
@@ -801,18 +794,6 @@
                             <div class="fm-range-with-icon"><i class="fas fa-sun"></i><input type="range" class="fm-bg-slider" id="fm-bg-brightness" min="10" max="150" value="70"></div>
                         </div>
                     </div>
-
-                    <div class="fm-settings-section">
-                        <div class="fm-settings-section-title">悬浮球</div>
-                        <div class="fm-more-row">
-                            <span>显示悬浮球</span>
-                            <label class="fm-switch">
-                                <input type="checkbox" id="fm-ball-visible">
-                                <span class="fm-switch-slider"></span>
-                            </label>
-                        </div>
-                        <div style="font-size:10px;color:var(--fm-text-sub);line-height:1.5;">关闭后不会影响播放器本身；需要再次显示时，从 SillyTavern 的扩展面板打开「АрⅤ播放器」，再到这里开启。</div>
-                    </div>
                 </section>
             </main>
 
@@ -871,7 +852,6 @@
         sizeSlider: wrapper.querySelector('#fm-size-slider'),
         colorPicker: wrapper.querySelector('#fm-color-picker'),
         shapeBtn: wrapper.querySelector('#fm-shape-btn'),
-        ballVisibleToggle: wrapper.querySelector('#fm-ball-visible'),
         bgUploadInput: wrapper.querySelector('#fm-bg-upload'),
         bgUploadBtn: wrapper.querySelector('#fm-bg-btn-upload'),
         bgClearBtn: wrapper.querySelector('#fm-bg-btn-clear'),
@@ -2140,9 +2120,6 @@
 
         UI.wrapper.style.setProperty('--fm-ball-size', `${savedSettings.ballSize}px`);
         UI.wrapper.style.setProperty('--fm-custom-color', savedSettings.customColor);
-        savedSettings.showBall = savedSettings.showBall !== false;
-        if (UI.ball) UI.ball.classList.toggle('fm-ball-hidden', !savedSettings.showBall);
-        if (UI.ballVisibleToggle) UI.ballVisibleToggle.checked = savedSettings.showBall;
         
         if (savedSettings.shapeStyle === 'square') {
             UI.wrapper.style.setProperty('--fm-radius-ball', '8px');
@@ -2196,7 +2173,6 @@
 
     UI.sizeSlider.value = savedSettings.ballSize;
     UI.colorPicker.value = savedSettings.customColor;
-    if (UI.ballVisibleToggle) UI.ballVisibleToggle.checked = savedSettings.showBall !== false;
     UI.bgBlurSlider.value = savedSettings.bgBlur;
     UI.bgBrightnessSlider.value = savedSettings.bgBrightness;
     UI.lrcFontSlider.value = savedSettings.lrcFont;
@@ -2215,13 +2191,6 @@
 
     UI.sizeSlider.oninput = (e) => {
         savedSettings.ballSize = e.target.value;
-        applySettings(false);
-        scheduleSettingsSave();
-    };
-
-    UI.ballVisibleToggle.onchange = (e) => {
-        savedSettings.showBall = !!e.target.checked;
-        STATE.isVisible = savedSettings.showBall;
         applySettings(false);
         scheduleSettingsSave();
     };
@@ -2381,56 +2350,14 @@
         API.toast(msg);
     }
     
-    // 兼容旧版“显隐播放器”按钮：现在只控制悬浮球，不会关闭播放器窗口。
     targetWin._flowMusicToggle = () => {
-        savedSettings.showBall = !savedSettings.showBall;
-        STATE.isVisible = savedSettings.showBall;
-        applySettings(false);
-        scheduleSettingsSave();
+        STATE.isVisible = !STATE.isVisible;
+        if (STATE.isVisible) UI.wrapper.classList.remove('force-hide');
+        else {
+            UI.wrapper.classList.add('force-hide');
+            if (STATE.isExpanded) togglePanel();
+        }
     };
-
-    // 从 SillyTavern 扩展面板打开播放器：直接打开完整播放器窗口，
-    // 不把播放器 UI 塞进扩展面板。
-    const openPlayerPanel = () => {
-        if (!STATE.isExpanded) togglePanel();
-    };
-
-    const installExtensionEntry = () => {
-        const host = targetDoc.querySelector('#extensions_settings2') || targetDoc.querySelector('#extensions_settings');
-        if (!host || host.querySelector('#apv-terminal-extension-entry')) return false;
-
-        const entry = targetDoc.createElement('div');
-        entry.id = 'apv-terminal-extension-entry';
-        entry.innerHTML = `
-            <div class="inline-drawer apv-extension-drawer">
-                <div class="inline-drawer-toggle inline-drawer-header apv-extension-open" role="button" tabindex="0" title="打开АрⅤ播放器">
-                    <b><i class="fa-solid fa-music"></i> АрⅤ播放器</b>
-                    <div class="inline-drawer-icon fa-solid fa-up-right-from-square"></div>
-                </div>
-            </div>`;
-
-        const open = (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            openPlayerPanel();
-        };
-        const trigger = entry.querySelector('.apv-extension-open');
-        trigger.addEventListener('click', open);
-        trigger.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' || event.key === ' ') open(event);
-        });
-        host.appendChild(entry);
-        return true;
-    };
-
-    // 扩展面板在部分 ST 版本会延后挂载，做一次立即尝试 + 短时重试。
-    if (!installExtensionEntry()) {
-        let tries = 0;
-        const timer = targetWin.setInterval(() => {
-            tries += 1;
-            if (installExtensionEntry() || tries >= 30) targetWin.clearInterval(timer);
-        }, 250);
-    }
 
     if (typeof eventOn === 'function' && typeof getButtonEvent === 'function') {
         eventOn(getButtonEvent('显隐播放器'), targetWin._flowMusicToggle);
